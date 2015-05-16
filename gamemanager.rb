@@ -1,3 +1,7 @@
+require 'csv'
+require 'json'
+
+
 class GamePlayer
 	attr_accessor :capital, :having_stores,:name ,:masu
 	def initialize(name)
@@ -9,11 +13,12 @@ class GamePlayer
 
 	def bought_store(store_id,price)
 		@having_stores.push(store_id)
-		@capital -= price
+		@capital -= price.to_i
 	end
 
 	def show_pleyer_status()
 		p @masu.to_s + " " + @name + " " +  @capital.to_s + " " + having_stores.length.to_s 
+		return @masu.to_s + " " + @name + " " +  @capital.to_s + " " + having_stores.length.to_s 
 	end
 end
 
@@ -64,19 +69,21 @@ end
 
 class Map
 	attr_accessor :masues
-	def initialize()
-			# masues[0] = {:type =>"",:name => "" ,:color => "" ,:price => ,:rent =>[,,,,]}
+	def initialize(mapfile)
+			line = ':id,:type,:name,:color,:price,:rent'
+			header = [:id,:type,:name,:color,:price,:rent]
+
+			csv = File.read(mapfile)
+
 			@masues = []
-			@masues[0] = {:type =>"none",:name => "GO" ,:color => "0" ,:price => 0,:rent =>[0,0,0,0,0],:who_has => ""}
-			@masues[1] = {:type =>"store",:name => "地中海（メディタレーニアン）通り" ,:color => "braun" ,:price => 50,:rent =>[50,100,150,200,250],:who_has => ""}
-			@masues[2] = {:type =>"fund",:name => "共同基金（コミュニティー・チェスト）" ,:color => "0" ,:price => 0,:rent =>[0,0,0,0,0],:who_has => ""}
-			@masues[3] = {:type =>"store",:name => "バルティック通り" ,:color => "braun" ,:price => 50,:rent =>[50,100,150,200,250],:who_has => ""}
+			CSV(csv).each_with_index do |row, i|
+			  
+			  @masues[i] = Hash[*[header, row].transpose.flatten]
 
-			#---------debug(めんどくさい)----------
-			for i in 4..50 do 
-				@masues[i] = {:type =>"store",:name => "バルティック通り" ,:color => "braun" ,:price => 50,:rent =>[60,100,150,200,250],:who_has => ""}
+			  @masues[i][:rent] = @masues[i][:rent].split.map(&:to_i)
+			  @masues[i][:who_has] = ""
+			  # puts JSON.dump(hash)
 			end
-
 	end
 
 
@@ -123,7 +130,7 @@ end
 class GameManager
 	attr_accessor :pm
 	def initialize()
-		@map = Map.new()
+		@map = Map.new("map.csv")
 		# @map.show_@map()
 		@pm = PlayerManager.new()
 		@tm = TurnManager.new()
@@ -131,9 +138,19 @@ class GameManager
 		@pm.get_allplayers()
 	
 	end
+	def show_status()
+		status = []
+		puts "---------ゲーム状況------------"
+		@pm.players.each_with_index{|p,i|
+			print "☆ "
+			status[i] = p.show_pleyer_status()
+		}
+		puts "---------ゲーム状況------------"
 
-
-	def one_turn()
+		return status
+	end
+	#ひと通り回すだけ
+	def debug_one_turn()
 
 		puts ""
 
@@ -146,10 +163,11 @@ class GameManager
 		puts "DiceRoll!"
 
 		result ,sum =  Dice.double_dice_ROll(2,6)
+		# STDIN.gets
 		p result
 		p "☆☆☆ドン☆☆☆☆    " + sum.to_s + "   ☆☆☆ドン☆☆☆☆"
 
-		@nowplayer.masu += sum
+		@nowplayer.masu = (@nowplayer.masu + sum)% @map.masues.length
 
 		@nowmasu   = @map.masues[@nowplayer.masu]
 
@@ -163,63 +181,50 @@ class GameManager
 		# puts @nowmasu.to_s
 
 		if @nowmasu[:type] == "store" then
+			puts "stop store masu!"
 			if @nowmasu[:who_has]=="" then
-					puts "you can buy here"
-				
+					puts "you can buy here (y/n)"
+					
 
-				#if buy
-				if(@map.buy_store(@nowplayer.masu,@nowplayer.name)) then
-					puts "buy!"
-					@nowplayer.bought_store(@nowplayer.masu,@nowmasu[:price])
-				end
+					# isbuy = STDIN.gets 
+					# isbuy.chop!
 
-				p @nowplayer.having_stores
+					#debug
+					isbuy ="y"
+
+					if(isbuy.to_s == "y") then
+						#if buy
+						if(@map.buy_store(@nowplayer.masu,@nowplayer.name)) then
+							puts "buy!"
+							@nowplayer.bought_store(@nowplayer.masu,@nowmasu[:price])
+						end
+
+						p @nowplayer.having_stores
+					end
 
 			else 
 				puts "this masu is had " + @nowmasu[:who_has]
 				puts "minus " + @nowmasu[:price].to_s
-				@nowplayer.capital -= @nowmasu[:price]
+				@nowplayer.capital -= @nowmasu[:price].to_i
 				@pm.players.each{|p|
 					if p.name == @nowmasu[:who_has] then
 						p.capital += @nowmasu[:rent][0]
 					end
 				}
 			end
+		elsif @nowmasu[:type] == "fund"  then 
+			puts "fund"
+			#fundの処理 test用
+			@nowplayer.capital += Dice.dice_Roll(6) * 50
+
+		elsif @nowmasu[:type] == "chance" then
+			puts "chance"
+			#fundの処理 test用
+			@nowplayer.capital += 100
 		end
+			
 
 		@tm.step_turn()
 	end
 
-	def show_status()
-		puts "---------ゲーム状況------------"
-		@pm.players.each{|p|
-			print "☆ "
-			p.show_pleyer_status()
-		}
-		puts "---------ゲーム状況------------"
-	end
 end
-
-
-g = GameManager.new()
-g.pm.join_player("aa")
-g.pm.join_player("kamijo")
-g.pm.join_player("dabis")
-g.pm.join_player("yamaguchi")
-g.pm.join_player("sibazaki")
-
-g.one_turn()
-g.one_turn()
-g.one_turn()
-g.one_turn()
-g.one_turn()
-
-g.show_status()
-
-g.one_turn()
-g.one_turn()
-g.one_turn()
-g.one_turn()
-g.one_turn()
-
-g.show_status()
