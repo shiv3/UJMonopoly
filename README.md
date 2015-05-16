@@ -3,4 +3,4 @@
 
 ###websocketでunityとJSで通信
 
-ruby test.rb
+ruby 		test.rb
